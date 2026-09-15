@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-TV Fernbedienung</title>
+    <style>
+        /* --- RESET & BASIC STYLES --- */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        :root {
+            --bg-color: #121212;
+            --remote-bg: linear-gradient(145deg, #2a2d32, #111315);
+            --btn-bg: linear-gradient(135deg, #464a51, #1e2024);
+            --btn-active-bg: linear-gradient(135deg, #1e2024, #2d3035);
+            --display-bg: #050b06;
+            --neon-green: #00ff00;
+            --led-off: #3a0000;
+            --led-on: #ff003c;
+            --text-muted: #8e9297;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            overflow-y: scroll; /* Native Scrollbar erzwingen */
+        }
+
+        /* --- REMOTE CASING (GEHÄUSE) --- */
+        .remote-container {
+            width: 100%;
+            max-width: 100%;
+            background: var(--remote-bg);
+            box-shadow: inset 0 0 2rem rgba(0, 0, 0, 0.8), 0 0 3rem rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1.5rem 1rem 1rem 1rem;
+        }
+
+        /* --- TOP BAR (KOPFZEILE) --- */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding: 0 0.5rem;
+        }
+
+        /* LED Statusleuchte */
+        .led-indicator {
+            width: 1.2rem;
+            height: 1.2rem;
+            border-radius: 50%;
+            background-color: var(--led-off);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 1px 2px rgba(255,255,255,0.1);
+            transition: background-color 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .led-indicator.active {
+            background-color: var(--led-on);
+            box-shadow: 0 0 15px 4px var(--led-on), inset 0 2px 2px rgba(255,255,255,0.4);
+        }
+
+        /* Mode Switch (Schieberegler) */
+        .switch-container {
+            display: flex;
+            align-items: center;
+            background: #15171c;
+            padding: 0.2rem;
+            border-radius: 2rem;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5), 0 1px 1px rgba(255,255,255,0.05);
+            position: relative;
+            cursor: pointer;
+            width: 5.5rem;
+            height: 2.2rem;
+        }
+
+        .switch-label {
+            flex: 1;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: var(--text-muted);
+            z-index: 2;
+            transition: color 0.3s ease;
+        }
+
+        .switch-label.active-label {
+            color: #ffffff;
+        }
+
+        .switch-toggle {
+            position: absolute;
+            top: 0.2rem;
+            left: 0.2rem;
+            width: 2.5rem;
+            height: 1.8rem;
+            background: linear-gradient(135deg, #5a5e66, #2c2f35);
+            border-radius: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.2);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1;
+        }
+
+        .switch-container.tur .switch-toggle {
+            transform: translateX(2.6rem);
+        }
+
+        /* --- DISPLAY AREA --- */
+        .display-panel {
+            background-color: var(--display-bg);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(255,255,255,0.05);
+            border: 1px solid #1a1d24;
+            min-height: 4.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .display-text {
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            text-shadow: 0 0 8px rgba(0, 255, 0, 0.7);
+            line-height: 1.4;
+        }
+
+        /* --- BUTTON GRID --- */
+        .grid-wrapper {
+            flex-grow: 1;
+            margin-bottom: 1.5rem;
+        }
+
+        #button-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Mobile First: 2 Spalten */
+            gap: 0.8rem;
+        }
+
+        .tv-button {
+            background: var(--btn-bg);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 0.4rem;
+            padding: 1rem 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+            transition: transform 0.05s ease, box-shadow 0.05s ease;
+            outline: none;
+            word-break: break-word;
+        }
+
+        .btn-num {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: bold;
+        }
+
+        /* Interaktions-Effekte */
+        @media (hover: hover) {
+            .tv-button:hover {
+                background: linear-gradient(135deg, #50555d, #23262a);
+                color: #ffffff;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), 0 0 4px rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        .tv-button:active {
+            background: var(--btn-active-bg);
+            box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.7), 0 1px 1px rgba(255,255,255,0.05);
+            transform: translateY(2px);
+        }
+
+        /* --- FOOTER --- */
+        .remote-footer {
+            text-align: center;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .footer-text {
+            color: var(--text-muted);
+            font-size: 0.65rem;
+            letter-spacing: 0.5px;
+        }
+
+        /* --- RESPONSIVE BREAKPOINTS (RWD) --- */
+        @media (min-width: 600px) {
+            #button-grid {
+                grid-template-columns: repeat(4, 1fr); /* Tablet: 4 Spalten */
+                gap: 1rem;
+            }
+            .remote-container {
+                padding: 2rem;
+                max-width: 85vw;
+                border-radius: 1.5rem;
+                align-self: center;
+                min-height: 90vh;
+                box-shadow: inset 0 0 2rem rgba(0, 0, 0, 0.8), 0 15px 35px rgba(0, 0, 0, 0.7);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            #button-grid {
+                grid-template-columns: repeat(6, 1fr); /* Desktop: 6 Spalten */
+                gap: 1.2rem;
+            }
+            .remote-container {
+                max-width: 65rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="remote-container">
+        <!-- KOPFZEILE -->
+        <header class="top-bar">
+            <div class="led-indicator" id="status-led" aria-label="Status LED"></div>
+            <div class="switch-container" id="mode-switch" role="button" aria-label="Modus umschalten">
+                <span class="switch-label active-label" id="label-de">DE</span>
+                <span class="switch-label" id="label-tur">TUR</span>
+                <div class="switch-toggle"></div>
+            </div>
+        </header>
+
+        <!-- DISPLAY -->
+        <section class="display-panel">
+            <div class="display-text" id="live-display">MODUS: DE<br>BEREIT</div>
+        </section>
+
+        <!-- BUTTON CONTAINER -->
+        <main class="grid-wrapper">
+            <div id="button-grid"></div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="remote-footer">
+            <p class="footer-text">https://digithalis.github.io/webtv | Klicke auf ein TV-Sender</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- DATA STRUCTURE (JSON) ---
+        const channelData = {
+            "DE": [
+                // 1. Die großen Hauptsender (Top 6)
+                { "nummer": 1, "name": "ZDF", "url": "https://zdf.de" },
+                { "nummer": 2, "name": "Das Erste", "url": "https://ardmediathek.de" },
+                { "nummer": 3, "name": "RTL", "url": "https://rtl.de" },
+                { "nummer": 4, "name": "Sat.1", "url": "https://joyn.de" },
+                { "nummer": 5, "name": "VOX", "url": "https://rtl.de/live-tv/vox" },
+                { "nummer": 6, "name": "ProSieben", "url": "https://joyn.de" },
+
+                // 2. Die Dritten Regionalprogramme der ARD
+                { "nummer": 7, "name": "WDR", "url": "https://wdr.de" },
+                { "nummer": 8, "name": "NDR", "url": "https://ndr.de" },
+                { "nummer": 9, "name": "BR Fernsehen", "url": "https://br.de" },
+                { "nummer": 10, "name": "MDR", "url": "https://mdr.de" },
+                { "nummer": 11, "name": "SWR", "url": "https://swrfernsehen.de" },
+                { "nummer": 12, "name": "hr-fernsehen", "url": "https://hr-fernsehen.de" },
+                { "nummer": 13, "name": "rbb", "url": "https://rbb-online.de" },
+                { "nummer": 14, "name": "SR Fernsehen", "url": "https://sr.de" },
+
+                // 3. Öffentlich-rechtliche Digital- & Kultursparten
+                { "nummer": 15, "name": "ZDFneo", "url": "https://zdf.de?kanal=zdfneo" },
+                { "nummer": 16, "name": "ZDFinfo", "url": "https://zdf.de?kanal=zdfinfo" },
+                { "nummer": 17, "name": "3sat", "url": "https://3sat.de" },
+                { "nummer": 18, "name": "Arte", "url": "https://arte.tv" },
+                { "nummer": 19, "name": "Phoenix", "url": "https://phoenix.de" },
+                { "nummer": 20, "name": "KiKa", "url": "https://kika.de" },
+                { "nummer": 21, "name": "Tagesschau24", "url": "https://tagesschau.de" },
+                { "nummer": 22, "name": "ONE", "url": "https://ardmediathek.de" },
+                { "nummer": 23, "name": "ARD-alpha", "url": "https://br.de/ard-alpha" },
+
+                // 4. Private Unterhaltungs- & Spartensender
+                { "nummer": 24, "name": "Kabel Eins", "url": "https://joyn.de" },
+                { "nummer": 25, "name": "RTL Zwei", "url": "https://rtl.de/live-tv/rtl2" },
+                { "nummer": 26, "name": "Nitro", "url": "https://rtl.de/live-tv/nitro" },
+                { "nummer": 27, "name": "Super RTL", "url": "https://rtl.de/live-tv/super-rtl" },
+                { "nummer": 28, "name": "ProSieben MAXX", "url": "https://joyn.de-maxx" },
+                { "nummer": 29, "name": "Sat.1 Gold", "url": "https://joyn.de-gold" },
+                { "nummer": 30, "name": "RTLup", "url": "https://rtl.de/live-tv/rtlup" },
+                { "nummer": 31, "name": "Sixx", "url": "https://joyn.de" },
+                { "nummer": 32, "name": "Kabel Eins Doku", "url": "https://joyn.de-doku" },
+                { "nummer": 33, "name": "DMAX", "url": "https://joyn.de" },
+                { "nummer": 34, "name": "Tele 5", "url": "https://joyn.de" },
+                { "nummer": 35, "name": "TLC", "url": "https://joyn.de" },
+                { "nummer": 36, "name": "Comedy Central", "url": "https://comedycentral.de" },
+
+                // 5. News & Info (Privat)
+                { "nummer": 37, "name": "ntv", "url": "https://n-tv.de" },
+                { "nummer": 38, "name": "Welt", "url": "https://welt.de" },
+
+                // 6. Sport, Musik & Kinder (Privat)
+                { "nummer": 39, "name": "Sport1", "url": "https://sport1.de" },
+                { "nummer": 40, "name": "Eurosport 1", "url": "https://joyn.de" },
+                { "nummer": 41, "name": "Disney Channel", "url": "https://joyn.de" },
+                { "nummer": 42, "name": "Toggo Plus", "url": "https://rtl.de/live-tv/toggo-plus" },
+                { "nummer": 43, "name": "Deluxe Music", "url": "https://deluxemusic.de" },
+                { "nummer": 44, "name": "MTV Germany", "url": "https://mtv.de" }
+            ],
+            "TUR": [
+                // 1. Die großen nationalen Hauptsender (Ulusal Kanallar)
+                { "nummer": 1, "name": "TRT 1", "url": "https://trtizle.com" },
+                { "nummer": 2, "name": "ATV", "url": "https://atv.com.tr" },
+                { "nummer": 3, "name": "Kanal D", "url": "https://kanald.com.tr" },
+                { "nummer": 4, "name": "Star TV", "url": "https://startv.com.tr" },
+                { "nummer": 5, "name": "Show TV", "url": "https://showtv.com.tr" },
+                { "nummer": 6, "name": "NOW TV", "url": "https://nowtv.com.tr" },
+                { "nummer": 7, "name": "TV8", "url": "https://tv8.com.tr" },
+                { "nummer": 8, "name": "Kanal 7", "url": "https://kanal7.com" },
+                { "nummer": 9, "name": "Beyaz TV", "url": "https://beyaztv.com.tr" },
+                { "nummer": 10, "name": "Flash Haber", "url": "https://flashhabertv.com" },
+
+                // 2. Nachrichten & Information (Haber Kanalları)
+                { "nummer": 11, "name": "TRT Haber", "url": "https://trtizle.com" },
+                { "nummer": 12, "name": "HaberTürk", "url": "https://haberturk.com" },
+                { "nummer": 13, "name": "CNN Türk", "url": "https://cnnturk.com" },
+                { "nummer": 14, "name": "NTV", "url": "https://ntv.com.tr" },
+                { "nummer": 15, "name": "Sözcü TV", "url": "https://szctv.com.tr" },
+                { "nummer": 16, "name": "Halk TV", "url": "https://halktv.com.tr" },
+                { "nummer": 17, "name": "A Haber", "url": "https://ahaber.com.tr" },
+                { "nummer": 18, "name": "Global TV", "url": "https://haberglobal.com.tr" },
+                { "nummer": 19, "name": "TGRT Haber", "url": "https://tgrthaber.com" },
+                { "nummer": 20, "name": "24 TV", "url": "https://yirmidort.tv" },
+                { "nummer": 21, "name": "Ülke TV", "url": "https://ulketv.com.tr" },
+                { "nummer": 22, "name": "TVNET", "url": "https://tvnet.com.tr" },
+
+                // 3. Sport-Kanäle (Spor Kanalları)
+                { "nummer": 23, "name": "A Spor", "url": "https://aspor.com.tr" },
+                { "nummer": 24, "name": "TRT Spor", "url": "https://trtizle.com" },
+                { "nummer": 25, "name": "TRT Spor Yıldız", "url": "https://trtizle.com-yildiz" },
+                { "nummer": 26, "name": "FB TV", "url": "https://fenerbahce.org" },
+                { "nummer": 27, "name": "SportsTV", "url": "https://sportstv.com.tr" },
+
+                // 4. Dokumentation, Kultur & Wirtschaft (Belgesel & Kültür)
+                { "nummer": 28, "name": "TRT Belgesel", "url": "https://trtizle.com" },
+                { "nummer": 29, "name": "Bloomberg HT", "url": "https://bloomberght.com" },
+                { "nummer": 30, "name": "Ekol TV", "url": "https://ekoltv.com.tr" },
+                { "nummer": 31, "name": "TRT Avaz", "url": "https://trtizle.com" },
+                { "nummer": 32, "name": "TRT Türk", "url": "https://trtizle.com" },
+                { "nummer": 33, "name": "Ekoloji TV", "url": "https://ekolojitv.com" },
+
+                // 5. Film, Serie & Unterhaltung (Sinema & Eğlence)
+                { "nummer": 34, "name": "Teve2", "url": "https://teve2.com.tr" },
+                { "nummer": 35, "name": "TV8.5", "url": "https://tv85.com" },
+                { "nummer": 36, "name": "a2 TV", "url": "https://atv.com.tr" },
+                { "nummer": 37, "name": "TLC Turkey", "url": "https://tlctv.com.tr" },
+                { "nummer": 38, "name": "DMAX Turkey", "url": "https://dmax.com.tr" },
+
+                // 6. Kinder & Musik (Çocuk & Müzik)
+                { "nummer": 39, "name": "TRT Çocuk", "url": "https://trtizle.com" },
+                { "nummer": 40, "name": "Minika GO", "url": "https://minika.com.tr" },
+                { "nummer": 41, "name": "Minika Çocuk", "url": "https://minika.com.tr" },
+                { "nummer": 42, "name": "Kral TV", "url": "https://kralmuzik.com.tr" },
+                { "nummer": 43, "name": "Number One TV", "url": "https://numberone.com.tr" },
+                { "nummer": 44, "name": "Power TV", "url": "https://powerapp.com"}
+            ]
+        };
+
+        // --- STATE MANAGEMENT ---
+        let currentMode = "DE";
+
+        // --- DOM ELEMENTS ---
+        const buttonGrid = document.getElementById('button-grid');
+        const modeSwitch = document.getElementById('mode-switch');
+        const labelDe = document.getElementById('label-de');
+        const labelTur = document.getElementById('label-tur');
+        const liveDisplay = document.getElementById('live-display');
+        const statusLed = document.getElementById('status-led');
+
+        // --- FUNCTIONS ---
+
+        // Grid dynamisch generieren
+        function renderButtons(mode) {
+            buttonGrid.innerHTML = ""; 
+            
+            const channels = channelData[mode];
+            channels.forEach(channel => {
+                const btn = document.createElement('button');
+                btn.className = 'tv-button';
+                btn.setAttribute('role', 'link');
+                
+                btn.innerHTML = `
+                    <span class="btn-num">${String(channel.nummer).padStart(2, '0')}</span>
+                    <span class="btn-name">${channel.name}</span>
+                `;
+                
+                btn.addEventListener('click', () => handleChannelClick(channel));
+                buttonGrid.appendChild(btn);
+            });
+        }
+
+        // Klick Interaktion (LED Blitz & Display Update)
+        function handleChannelClick(channel) {
+            // 1. LED Blitz-Effekt (200ms)
+            statusLed.classList.add('active');
+            setTimeout(() => {
+                statusLed.classList.remove('active');
+            }, 200);
+
+            // 2. Display textuell aktualisieren
+            liveDisplay.innerHTML = `CH ${String(channel.nummer).padStart(2, '0')}<br>${channel.name.toUpperCase()}`;
+
+            // 3. URL im neuen Tab öffnen
+            if (channel.url && channel.url !== "#") {
+                window.open(channel.url, '_blank');
+            }
+        }
+
+        // Switch Funktion für Modus-Wechsel
+        function toggleMode() {
+            if (currentMode === "DE") {
+                currentMode = "TUR";
+                modeSwitch.classList.add('tur');
+                labelDe.classList.remove('active-label');
+                labelTur.classList.add('active-label');
+            } else {
+                currentMode = "DE";
+                modeSwitch.classList.remove('tur');
+                labelTur.classList.remove('active-label');
+                labelDe.classList.add('active-label');
+            }
+            
+            renderButtons(currentMode);
+            liveDisplay.innerHTML = `MODUS: ${currentMode}<br>BEREIT`;
+        }
+
+        // --- EVENT LISTENER ---
+        modeSwitch.addEventListener('click', toggleMode);
+
+        // --- INIT ---
+        renderButtons(currentMode);
+    </script>
+</body>
+</html>
